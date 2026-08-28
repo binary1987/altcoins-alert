@@ -263,7 +263,7 @@ def send_telegram(msg):
 
 def build_signal_message(color, symbol, description):
     """Formato profesional: SEÑAL DE COMPRA/VENTA + nombre completo + par."""
-    label = "SEÑAL DE COMPRA" if color == "🟢" else "SEÑAL DE VENTA"
+    label = "POSIBLE SEÑAL DE COMPRA" if color == "🟢" else "POSIBLE SEÑAL DE VENTA"
     name = PAIR_NAMES.get(symbol, symbol)
     return f"{color} {label}\n{name} ({symbol})\n{description}"
 
