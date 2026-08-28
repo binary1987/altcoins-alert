@@ -273,7 +273,7 @@ def build_dominance_message(action_color, title, description):
     alza, es bajista para BTC (posible venta). Sirve tanto para USDT.D
     como para el ratio USDT.D/BTC.D, pasando el 'title' adecuado.
     """
-    label = "POSIBLE COMPRA BTC" if action_color == "🟢" else "POSIBLE VENTA BTC"
+    label = "POSIBLE SEÑAL DE COMPRA BTC" if action_color == "🟢" else "POSIBLE SEÑAL DE VENTA BTC"
     return f"{action_color} {label}\n{title}\n{description}"
 
 
