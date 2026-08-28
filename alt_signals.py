@@ -71,14 +71,15 @@ def compute_rsi(closes, period=14):
     return 100 - (100 / (1 + rs))
 
 
-def zone_label(rsi):
+def zone_info(rsi):
+    """Devuelve (etiqueta, emoji_color) o (None, None) si no esta en zona extrema."""
     if rsi is None:
-        return None
+        return None, None
     if rsi >= RSI_OVERBOUGHT:
-        return "⚠️ sobrecompra"
+        return "sobrecompra", "🔴"
     if rsi <= RSI_OVERSOLD:
-        return "⚠️ sobreventa"
-    return None
+        return "sobreventa", "🟢"
+    return None, None
 
 
 def send_telegram(msg):
@@ -105,24 +106,24 @@ def main():
         rsi_daily = compute_rsi(daily_closes)
         rsi_weekly = compute_rsi(weekly_closes)
 
-        flag_daily = zone_label(rsi_daily)
-        flag_weekly = zone_label(rsi_weekly)
+        label_daily, color_daily = zone_info(rsi_daily)
+        label_weekly, color_weekly = zone_info(rsi_weekly)
 
-        if flag_daily is None and flag_weekly is None:
+        if label_daily is None and label_weekly is None:
             rd = f"{rsi_daily:.0f}" if rsi_daily is not None else "N/A"
             rw = f"{rsi_weekly:.0f}" if rsi_weekly is not None else "N/A"
             print(f"{symbol}: sin zona extrema (RSI diario {rd}, semanal {rw})")
             continue
 
-        lines = [f"🔔 {symbol}"]
-        if flag_daily:
-            lines.append(f"RSI diario: {rsi_daily:.0f} {flag_daily}")
-        if flag_weekly:
-            lines.append(f"RSI semanal: {rsi_weekly:.0f} {flag_weekly}")
+        if label_daily:
+            msg = f"🔔{color_daily} {symbol} — {label_daily}\nRSI diario: {rsi_daily:.0f}"
+            print(msg)
+            send_telegram(msg)
 
-        msg = "\n".join(lines)
-        print(msg)
-        send_telegram(msg)
+        if label_weekly:
+            msg = f"🔔{color_weekly} {symbol} — {label_weekly}\nRSI semanal: {rsi_weekly:.0f}"
+            print(msg)
+            send_telegram(msg)
 
 
 if __name__ == "__main__":
