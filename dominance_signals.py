@@ -11,6 +11,8 @@ MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
 
 HISTORY_FILE = "dominance_history.json"
 STATE_FILE = "dominance_alerted.json"
+RATIO_HISTORY_FILE = "usdtd_btcd_ratio_history.json"
+RATIO_STATE_FILE = "usdtd_btcd_ratio_alerted.json"
 
 RSI_OVERBOUGHT = 75
 RSI_OVERSOLD = 25
@@ -29,10 +31,12 @@ def cg_headers():
     return {"x-cg-demo-api-key": api_key} if api_key else {}
 
 
-def get_usdt_dominance(retries=3, retry_delay=10):
+def get_dominance_data(retries=3, retry_delay=10):
     """
-    Calcula la dominancia actual de USDT (market cap USDT / market cap
-    total del mercado cripto) * 100. Reintenta ante fallos de red.
+    Calcula la dominancia actual de USDT y de BTC. La de BTC viene gratis
+    en la misma respuesta de /global (campo market_cap_percentage.btc),
+    asi que no hace falta ninguna llamada extra a la API para tenerla.
+    Devuelve (usdt_dominance, btc_dominance). Reintenta ante fallos de red.
     """
     import time as _time
 
@@ -43,6 +47,7 @@ def get_usdt_dominance(retries=3, retry_delay=10):
             with urllib.request.urlopen(req_global, timeout=15) as r:
                 global_data = json.loads(r.read().decode())
             total_market_cap = global_data["data"]["total_market_cap"]["usd"]
+            btc_dominance = global_data["data"]["market_cap_percentage"]["btc"]
 
             params = urllib.parse.urlencode({"vs_currency": "usd", "ids": "tether"})
             req_markets = urllib.request.Request(f"{MARKETS_URL}?{params}", headers=cg_headers())
@@ -50,10 +55,11 @@ def get_usdt_dominance(retries=3, retry_delay=10):
                 markets_data = json.loads(r.read().decode())
             usdt_market_cap = markets_data[0]["market_cap"]
 
-            return (usdt_market_cap / total_market_cap) * 100
+            usdt_dominance = (usdt_market_cap / total_market_cap) * 100
+            return usdt_dominance, btc_dominance
         except Exception as e:
             last_error = e
-            print(f"Aviso: fallo al calcular dominancia USDT (intento {attempt}/{retries}): {e}")
+            print(f"Aviso: fallo al calcular dominancia (intento {attempt}/{retries}): {e}")
             if attempt < retries:
                 _time.sleep(retry_delay)
 
@@ -258,53 +264,45 @@ def send_telegram(msg):
     urllib.request.urlopen(url, data=data, timeout=10)
 
 
-def build_dominance_message(action_color, description):
+def build_dominance_message(action_color, title, description):
     """
     Mensaje orientado a la accion sobre BTC/mercado, no al valor bruto de
-    la dominancia. La logica esta invertida a proposito: cuando USDT.D
+    la metrica. La logica esta invertida a proposito: cuando la metrica
     esta en sobrecompra o a punto de girar a la baja, es alcista para BTC
-    (posible compra); cuando USDT.D esta en sobreventa o a punto de girar
-    al alza, es bajista para BTC (posible venta).
+    (posible compra); cuando esta en sobreventa o a punto de girar al
+    alza, es bajista para BTC (posible venta). Sirve tanto para USDT.D
+    como para el ratio USDT.D/BTC.D, pasando el 'title' adecuado.
     """
     label = "POSIBLE COMPRA BTC" if action_color == "🟢" else "POSIBLE VENTA BTC"
-    return f"{action_color} {label}\nUSDT Dominance (USDT.D)\n{description}"
+    return f"{action_color} {label}\n{title}\n{description}"
 
 
-def main():
-    dominance = get_usdt_dominance()
-    print(f"Dominancia USDT hoy: {dominance:.2f}%")
-    is_new = append_history(dominance)
-    print("Guardado nuevo punto de hoy" if is_new else "Ya existia un punto para hoy, no se duplica")
-
-    history = read_history()
-    daily_values = [v for _, v in history]
-    weekly_values = weekly_from_daily(history)
-
-    print(f"Histórico acumulado: {len(daily_values)} días / {len(weekly_values)} semanas")
-
-    state = load_state()
-    sent = set(state.get("sent", []))
-
+def process_metric(metric_name, key_prefix, msg_title, daily_values, weekly_values, state, sent):
+    """
+    Aplica RSI diario/semanal y divergencia diario/semanal sobre una serie
+    de valores, con la misma logica invertida orientada a BTC (sobrecompra
+    / divergencia bajista de la metrica = alcista para BTC). Generico para
+    poder reutilizarlo tanto con USDT.D como con el ratio USDT.D/BTC.D.
+    """
     # --- RSI diario ---
     if len(daily_values) >= MIN_DAILY_FOR_RSI:
         rsi_daily = compute_rsi(daily_values)
         label, _ = zone_info(rsi_daily)
         if label:
-            # Logica invertida: sobrecompra en USDT.D = alcista para BTC
             action_color = "🟢" if label == "sobrecompra" else "🔴"
-            key = "usdtd:rsi_daily"
+            key = f"{key_prefix}:rsi_daily"
             if key not in sent:
-                desc = f"RSI diario en {label} ({rsi_daily:.0f})"
-                msg = build_dominance_message(action_color, desc)
+                desc = f"RSI diario en {label} ({rsi_daily:.2f})"
+                msg = build_dominance_message(action_color, msg_title, desc)
                 print(msg)
                 send_telegram(msg)
                 sent.add(key)
             else:
-                print(f"RSI diario en {label} pero ya avisado hoy")
+                print(f"{metric_name}: RSI diario en {label} pero ya avisado hoy")
         else:
-            print(f"RSI diario: {rsi_daily:.0f} (sin señal)")
+            print(f"{metric_name}: RSI diario {rsi_daily:.2f} (sin señal)")
     else:
-        print(f"RSI diario: acumulando histórico ({len(daily_values)}/{MIN_DAILY_FOR_RSI} días)")
+        print(f"{metric_name}: RSI diario acumulando histórico ({len(daily_values)}/{MIN_DAILY_FOR_RSI} días)")
 
     # --- RSI semanal ---
     if len(weekly_values) >= MIN_WEEKLY_FOR_RSI:
@@ -312,62 +310,93 @@ def main():
         label, _ = zone_info(rsi_weekly)
         if label:
             action_color = "🟢" if label == "sobrecompra" else "🔴"
-            key = "usdtd:rsi_weekly"
+            key = f"{key_prefix}:rsi_weekly"
             if key not in sent:
-                desc = f"RSI semanal en {label} ({rsi_weekly:.0f})"
-                msg = build_dominance_message(action_color, desc)
+                desc = f"RSI semanal en {label} ({rsi_weekly:.2f})"
+                msg = build_dominance_message(action_color, msg_title, desc)
                 print(msg)
                 send_telegram(msg)
                 sent.add(key)
             else:
-                print(f"RSI semanal en {label} pero ya avisado hoy")
+                print(f"{metric_name}: RSI semanal en {label} pero ya avisado hoy")
         else:
-            print(f"RSI semanal: {rsi_weekly:.0f} (sin señal)")
+            print(f"{metric_name}: RSI semanal {rsi_weekly:.2f} (sin señal)")
     else:
-        print(f"RSI semanal: acumulando histórico ({len(weekly_values)}/{MIN_WEEKLY_FOR_RSI} semanas)")
+        print(f"{metric_name}: RSI semanal acumulando histórico ({len(weekly_values)}/{MIN_WEEKLY_FOR_RSI} semanas)")
 
     # --- Divergencia diaria ---
     if len(daily_values) >= MIN_DAILY_FOR_DIVERGENCE:
         div_daily, div_daily_price = detect_divergence(daily_values, order=3, min_distance=5)
-        key = "usdtd:div_daily"
+        key = f"{key_prefix}:div_daily"
         if div_daily:
             if divergence_key_changed(state, key, div_daily_price):
-                # Logica invertida: divergencia bajista en USDT.D (dominancia
-                # a punto de girar a la baja) = alcista para BTC
                 action_color = "🟢" if div_daily == "bajista" else "🔴"
                 desc = f"Divergencia {div_daily} en diario"
-                msg = build_dominance_message(action_color, desc)
+                msg = build_dominance_message(action_color, msg_title, desc)
                 print(msg)
                 send_telegram(msg)
                 state["div_state"][key] = div_daily_price
             else:
-                print(f"Divergencia {div_daily} diaria, mismo extremo ya avisado")
+                print(f"{metric_name}: divergencia {div_daily} diaria, mismo extremo ya avisado")
         elif key in state["div_state"]:
             del state["div_state"][key]
     else:
-        print(f"Divergencia diaria: acumulando histórico ({len(daily_values)}/{MIN_DAILY_FOR_DIVERGENCE} días)")
+        print(f"{metric_name}: divergencia diaria acumulando histórico ({len(daily_values)}/{MIN_DAILY_FOR_DIVERGENCE} días)")
 
     # --- Divergencia semanal ---
     if len(weekly_values) >= MIN_WEEKLY_FOR_DIVERGENCE:
         div_weekly, div_weekly_price = detect_divergence(weekly_values, order=2, min_distance=3)
-        key = "usdtd:div_weekly"
+        key = f"{key_prefix}:div_weekly"
         if div_weekly:
             if divergence_key_changed(state, key, div_weekly_price):
                 action_color = "🟢" if div_weekly == "bajista" else "🔴"
                 desc = f"Divergencia {div_weekly} en semanal"
-                msg = build_dominance_message(action_color, desc)
+                msg = build_dominance_message(action_color, msg_title, desc)
                 print(msg)
                 send_telegram(msg)
                 state["div_state"][key] = div_weekly_price
             else:
-                print(f"Divergencia {div_weekly} semanal, mismo extremo ya avisado")
+                print(f"{metric_name}: divergencia {div_weekly} semanal, mismo extremo ya avisado")
         elif key in state["div_state"]:
             del state["div_state"][key]
     else:
-        print(f"Divergencia semanal: acumulando histórico ({len(weekly_values)}/{MIN_WEEKLY_FOR_DIVERGENCE} semanas)")
+        print(f"{metric_name}: divergencia semanal acumulando histórico ({len(weekly_values)}/{MIN_WEEKLY_FOR_DIVERGENCE} semanas)")
 
-    state["sent"] = sorted(sent)
-    save_state(state)
+
+def main():
+    usdt_dominance, btc_dominance = get_dominance_data()
+    ratio = usdt_dominance / btc_dominance
+
+    print(f"USDT.D hoy: {usdt_dominance:.2f}% | BTC.D hoy: {btc_dominance:.2f}% | Ratio USDT.D/BTC.D: {ratio:.4f}")
+
+    is_new_dom = append_history(usdt_dominance, path=HISTORY_FILE)
+    is_new_ratio = append_history(ratio, path=RATIO_HISTORY_FILE)
+    print("USDT.D: guardado punto de hoy" if is_new_dom else "USDT.D: ya existia punto para hoy")
+    print("Ratio: guardado punto de hoy" if is_new_ratio else "Ratio: ya existia punto para hoy")
+
+    # --- USDT.D ---
+    dom_history = read_history(path=HISTORY_FILE)
+    dom_daily = [v for _, v in dom_history]
+    dom_weekly = weekly_from_daily(dom_history)
+    print(f"USDT.D histórico: {len(dom_daily)} días / {len(dom_weekly)} semanas")
+
+    dom_state = load_state(path=STATE_FILE)
+    dom_sent = set(dom_state.get("sent", []))
+    process_metric("USDT.D", "usdtd", "USDT Dominance (USDT.D)", dom_daily, dom_weekly, dom_state, dom_sent)
+    dom_state["sent"] = sorted(dom_sent)
+    save_state(dom_state, path=STATE_FILE)
+
+    # --- Ratio USDT.D/BTC.D ---
+    ratio_history = read_history(path=RATIO_HISTORY_FILE)
+    ratio_daily = [v for _, v in ratio_history]
+    ratio_weekly = weekly_from_daily(ratio_history)
+    print(f"Ratio USDT.D/BTC.D histórico: {len(ratio_daily)} días / {len(ratio_weekly)} semanas")
+
+    ratio_state = load_state(path=RATIO_STATE_FILE)
+    ratio_sent = set(ratio_state.get("sent", []))
+    process_metric("Ratio USDT.D/BTC.D", "ratio", "USDT.D / BTC.D", ratio_daily, ratio_weekly, ratio_state, ratio_sent)
+    ratio_state["sent"] = sorted(ratio_sent)
+    save_state(ratio_state, path=RATIO_STATE_FILE)
 
 
 if __name__ == "__main__":
