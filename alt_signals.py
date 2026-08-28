@@ -2,6 +2,7 @@
 # alt_signals.py
 import os
 import json
+import time
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
@@ -91,15 +92,32 @@ def cg_headers():
     return {"x-cg-demo-api-key": api_key} if api_key else {}
 
 
-def get_market_chart_btc(coin_id, days=365):
-    """Precios del par en BTC (vs_currency=btc), ultimos 'days' dias."""
+def get_market_chart_btc(coin_id, days=365, retries=3, retry_delay=10):
+    """
+    Precios del par en BTC (vs_currency=btc), ultimos 'days' dias.
+
+    Reintenta automaticamente ante fallos de red/timeout (hasta 'retries'
+    veces, con 'retry_delay' segundos de espera entre intentos), para que
+    un timeout puntual de CoinGecko no tire la ejecucion de ese par.
+    """
     url = MARKET_CHART_URL.format(id=coin_id)
     params = urllib.parse.urlencode({"vs_currency": "btc", "days": days})
     full_url = f"{url}?{params}"
-    req = urllib.request.Request(full_url, headers=cg_headers())
-    with urllib.request.urlopen(req, timeout=15) as r:
-        data = json.loads(r.read().decode())
-    return data["prices"]
+
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(full_url, headers=cg_headers())
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode())
+            return data["prices"]
+        except Exception as e:
+            last_error = e
+            print(f"Aviso: fallo al pedir {coin_id} (intento {attempt}/{retries}): {e}")
+            if attempt < retries:
+                time.sleep(retry_delay)
+
+    raise last_error
 
 
 def group_last(prices, keyfunc):
