@@ -258,9 +258,16 @@ def send_telegram(msg):
     urllib.request.urlopen(url, data=data, timeout=10)
 
 
-def build_signal_message(color, description):
-    label = "SEÑAL DE COMPRA" if color == "🟢" else "SEÑAL DE VENTA"
-    return f"{color} {label}\nUSDT Dominance (USDT.D)\n{description}"
+def build_dominance_message(action_color, description):
+    """
+    Mensaje orientado a la accion sobre BTC/mercado, no al valor bruto de
+    la dominancia. La logica esta invertida a proposito: cuando USDT.D
+    esta en sobrecompra o a punto de girar a la baja, es alcista para BTC
+    (posible compra); cuando USDT.D esta en sobreventa o a punto de girar
+    al alza, es bajista para BTC (posible venta).
+    """
+    label = "POSIBLE COMPRA BTC" if action_color == "🟢" else "POSIBLE VENTA BTC"
+    return f"{action_color} {label}\nUSDT Dominance (USDT.D)\n{description}"
 
 
 def main():
@@ -281,12 +288,14 @@ def main():
     # --- RSI diario ---
     if len(daily_values) >= MIN_DAILY_FOR_RSI:
         rsi_daily = compute_rsi(daily_values)
-        label, color = zone_info(rsi_daily)
+        label, _ = zone_info(rsi_daily)
         if label:
+            # Logica invertida: sobrecompra en USDT.D = alcista para BTC
+            action_color = "🟢" if label == "sobrecompra" else "🔴"
             key = "usdtd:rsi_daily"
             if key not in sent:
                 desc = f"RSI diario en {label} ({rsi_daily:.0f})"
-                msg = build_signal_message(color, desc)
+                msg = build_dominance_message(action_color, desc)
                 print(msg)
                 send_telegram(msg)
                 sent.add(key)
@@ -300,12 +309,13 @@ def main():
     # --- RSI semanal ---
     if len(weekly_values) >= MIN_WEEKLY_FOR_RSI:
         rsi_weekly = compute_rsi(weekly_values)
-        label, color = zone_info(rsi_weekly)
+        label, _ = zone_info(rsi_weekly)
         if label:
+            action_color = "🟢" if label == "sobrecompra" else "🔴"
             key = "usdtd:rsi_weekly"
             if key not in sent:
                 desc = f"RSI semanal en {label} ({rsi_weekly:.0f})"
-                msg = build_signal_message(color, desc)
+                msg = build_dominance_message(action_color, desc)
                 print(msg)
                 send_telegram(msg)
                 sent.add(key)
@@ -322,9 +332,11 @@ def main():
         key = "usdtd:div_daily"
         if div_daily:
             if divergence_key_changed(state, key, div_daily_price):
-                color = "🟢" if div_daily == "alcista" else "🔴"
+                # Logica invertida: divergencia bajista en USDT.D (dominancia
+                # a punto de girar a la baja) = alcista para BTC
+                action_color = "🟢" if div_daily == "bajista" else "🔴"
                 desc = f"Divergencia {div_daily} en diario"
-                msg = build_signal_message(color, desc)
+                msg = build_dominance_message(action_color, desc)
                 print(msg)
                 send_telegram(msg)
                 state["div_state"][key] = div_daily_price
@@ -341,9 +353,9 @@ def main():
         key = "usdtd:div_weekly"
         if div_weekly:
             if divergence_key_changed(state, key, div_weekly_price):
-                color = "🟢" if div_weekly == "alcista" else "🔴"
+                action_color = "🟢" if div_weekly == "bajista" else "🔴"
                 desc = f"Divergencia {div_weekly} en semanal"
-                msg = build_signal_message(color, desc)
+                msg = build_dominance_message(action_color, desc)
                 print(msg)
                 send_telegram(msg)
                 state["div_state"][key] = div_weekly_price
