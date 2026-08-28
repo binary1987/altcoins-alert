@@ -23,12 +23,12 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python dominance_signals.py
 
-      - name: Commit dominance_history.json y dominance_alerted.json
+      - name: Commit ficheros de histórico y estado
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dominance_history.json dominance_alerted.json
-          git diff --staged --quiet || git commit -m "Actualizar histórico de dominancia USDT"
+          git add dominance_history.json dominance_alerted.json usdtd_btcd_ratio_history.json usdtd_btcd_ratio_alerted.json
+          git diff --staged --quiet || git commit -m "Actualizar histórico de dominancia y ratio USDT.D/BTC.D"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main && git push && break
             sleep $((RANDOM % 5 + 1))
