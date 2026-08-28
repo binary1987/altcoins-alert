@@ -1,0 +1,35 @@
+name: USDT Dominance Alert
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run dominance_signals
+        env:
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          TELEGRAM_BOT_TOKEN_ALT: ${{ secrets.TELEGRAM_BOT_TOKEN_ALT }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python dominance_signals.py
+
+      - name: Commit dominance_history.json y dominance_alerted.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dominance_history.json dominance_alerted.json
+          git diff --staged --quiet || git commit -m "Actualizar histórico de dominancia USDT"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && break
+            sleep $((RANDOM % 5 + 1))
+          done
