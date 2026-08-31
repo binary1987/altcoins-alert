@@ -20,7 +20,6 @@ PAIRS = {
     "LINKBTC": "chainlink",
     "HYPEBTC": "hyperliquid",
     "PAXGBTC": "pax-gold",
-    "XMRBTC": "monero",
 }
 
 PAIR_NAMES = {
@@ -33,7 +32,6 @@ PAIR_NAMES = {
     "LINKBTC": "Chainlink",
     "HYPEBTC": "Hyperliquid",
     "PAXGBTC": "PAX Gold",
-    "XMRBTC": "Monero",
 }
 
 RSI_OVERBOUGHT = 75
