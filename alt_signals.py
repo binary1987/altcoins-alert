@@ -37,6 +37,13 @@ PAIR_NAMES = {
 RSI_OVERBOUGHT = 75
 RSI_OVERSOLD = 25
 
+# Umbrales de la condicion COMBINADA (diario Y semanal a la vez). El diario
+# coincide con el umbral individual (75/25), pero el semanal es mas laxo
+# (60/40) porque el RSI semanal rara vez llega a 75/25 al mismo tiempo que
+# el diario.
+RSI_COMBO_WEEKLY_OVERBOUGHT = 60
+RSI_COMBO_WEEKLY_OVERSOLD = 40
+
 STATE_FILE = "alerted_today.json"
 
 
@@ -251,6 +258,20 @@ def zone_info(rsi):
     return None, None
 
 
+def rsi_combo_info(rsi_daily, rsi_weekly):
+    """
+    Condicion combinada: RSI diario Y semanal en zona extrema a la vez.
+    Devuelve (etiqueta, emoji_color) o (None, None).
+    """
+    if rsi_daily is None or rsi_weekly is None:
+        return None, None
+    if rsi_daily >= RSI_OVERBOUGHT and rsi_weekly >= RSI_COMBO_WEEKLY_OVERBOUGHT:
+        return "sobrecompra", "🔴"
+    if rsi_daily <= RSI_OVERSOLD and rsi_weekly <= RSI_COMBO_WEEKLY_OVERSOLD:
+        return "sobreventa", "🟢"
+    return None, None
+
+
 def send_telegram(msg):
     token = os.environ.get("TELEGRAM_BOT_TOKEN_ALT")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -318,6 +339,18 @@ def main():
                 sent.add(key)
             else:
                 print(f"{symbol}: RSI semanal en {label_weekly} pero ya avisado hoy")
+
+        label_combo, color_combo = rsi_combo_info(rsi_daily, rsi_weekly)
+        if label_combo:
+            key = f"{symbol}:rsi_combo"
+            if key not in sent:
+                desc = f"RSI diario y semanal en {label_combo} a la vez (diario {rsi_daily:.0f}, semanal {rsi_weekly:.0f})"
+                msg = build_signal_message(color_combo, symbol, desc)
+                print(msg)
+                send_telegram(msg)
+                sent.add(key)
+            else:
+                print(f"{symbol}: RSI combinado en {label_combo} pero ya avisado hoy")
 
         div_daily_key = f"{symbol}:div_daily"
         if div_daily:
