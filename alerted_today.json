@@ -1,1 +1,1 @@
-{"date": "2026-09-11", "sent": [], "div_state": {"XRPBTC:div_daily": 1.547808206161547e-05, "TRXBTC:div_daily": 4.069899890736824e-06, "PAXGBTC:div_weekly": 0.06942825728538765, "LINKBTC:div_daily": 0.00016473584728871667, "PAXGBTC:div_daily": 0.055013041784691324}}
+{"date": "2026-09-11", "sent": ["ETHBTC:rsi_combo", "ETHBTC:rsi_daily"], "div_state": {"XRPBTC:div_daily": 1.547808206161547e-05, "TRXBTC:div_daily": 4.069899890736824e-06, "PAXGBTC:div_weekly": 0.06942825728538765, "LINKBTC:div_daily": 0.00016473584728871667, "PAXGBTC:div_daily": 0.055013041784691324}}
