@@ -21,6 +21,7 @@ PAIRS = {
     "LINKBTC": "chainlink",
     "HYPEBTC": "hyperliquid",
     "PAXGBTC": "pax-gold",
+    "ZECBTC": "zcash",
 }
 
 PAIR_NAMES = {
@@ -33,6 +34,7 @@ PAIR_NAMES = {
     "LINKBTC": "Chainlink",
     "HYPEBTC": "Hyperliquid",
     "PAXGBTC": "PAX Gold",
+    "ZECBTC": "Zcash",
 }
 
 RSI_OVERBOUGHT = 75
