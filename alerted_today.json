@@ -1,1 +1,1 @@
-{"date": "2026-11-21", "sent": [], "div_state": {"TRXBTC:div_daily": 4.783533678411405e-06, "XRPBTC:div_daily": 1.5887242967876333e-05}}
+{"date": "2026-11-21", "sent": ["TRXBTC:rsi_combo", "TRXBTC:rsi_daily"], "div_state": {"TRXBTC:div_daily": 4.783533678411405e-06, "XRPBTC:div_daily": 1.5887242967876333e-05}}
